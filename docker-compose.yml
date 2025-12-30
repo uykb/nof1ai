@@ -1,0 +1,49 @@
+services:
+  app:
+    build: .
+    container_name: nof-trading-bot
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - APP_PORT=3000
+      - DATABASE_URL=postgresql://nof_user:nof_password@db:5432/nof_db
+      - REDIS_URL=redis://redis:6379/0
+      # Pass through other environment variables
+      - HYPERLIQUID_PRIVATE_KEY=${HYPERLIQUID_PRIVATE_KEY}
+      - HYPERLIQUID_MAINNET=${HYPERLIQUID_MAINNET:-true}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - TAAPI_API_KEY=${TAAPI_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-x-ai/grok-4}
+      - API_HOST=0.0.0.0
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./data:/app/data  # Keep local data/logs if needed
+
+  db:
+    image: postgres:15-alpine
+    container_name: nof-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=nof_user
+      - POSTGRES_PASSWORD=nof_password
+      - POSTGRES_DB=nof_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:alpine
+    container_name: nof-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
+  redis_data:
