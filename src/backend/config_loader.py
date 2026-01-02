@@ -71,7 +71,14 @@ def _get_list(name: str, default: list[str] | None = None) -> list[str] | None:
 CONFIG = {
     # API keys - not required during module import (checked when bot starts)
     "taapi_api_key": _get_env("TAAPI_API_KEY"),
-    "hyperliquid_private_key": _get_env("HYPERLIQUID_PRIVATE_KEY") or _get_env("LIGHTER_PRIVATE_KEY"),
+    
+    # Lighter Exchange Keys
+    "lighter_api_key": _get_env("LIGHTER_API_KEY"),
+    "lighter_private_key": _get_env("LIGHTER_PRIVATE_KEY"),
+    "lighter_web3_private_key": _get_env("LIGHTER_WEB3_PRIVATE_KEY"),  # For signing if needed
+
+    # Hyperliquid (Signal Source Only)
+    "hyperliquid_private_key": _get_env("HYPERLIQUID_PRIVATE_KEY"),
     "mnemonic": _get_env("MNEMONIC"),
     # Hyperliquid network/base URL overrides
     "hyperliquid_base_url": _get_env("HYPERLIQUID_BASE_URL"),
