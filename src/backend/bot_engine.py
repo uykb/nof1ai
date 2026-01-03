@@ -16,7 +16,7 @@ from src.backend.agent.decision_maker import TradingAgent
 from src.backend.config_loader import CONFIG
 from src.backend.indicators.taapi_client import TAAPIClient
 from src.backend.models.trade_proposal import TradeProposal
-from src.backend.trading.lighter_api import LighterAPI
+from src.backend.trading.binance_api import BinanceAPI
 from src.backend.trading.hyperliquid_api import HyperliquidAPI
 from src.backend.utils.prompt_utils import json_default
 from src.database.db_manager import get_db_manager
@@ -46,7 +46,7 @@ class BotState:
 class TradingBotEngine:
     """
     Core trading bot engine.
-    EXECUTION: Lighter.xyz
+    EXECUTION: Binance Futures (USDT-M)
     SIGNALS: Hyperliquid (Read-only) + TAAPI
     """
 
@@ -81,8 +81,8 @@ class TradingBotEngine:
         self.agent = TradingAgent()
 
         # === HYBRID ARCHITECTURE ===
-        # 1. Execution Layer (Lighter.xyz)
-        self.exchange = LighterAPI()
+        # 1. Execution Layer (Binance)
+        self.exchange = BinanceAPI()
         
         # 2. Signal Layer (Hyperliquid - Read Only)
         self.hl = HyperliquidAPI(private_key=None)
@@ -104,7 +104,7 @@ class TradingBotEngine:
         self.trading_mode = CONFIG.get("trading_mode", "auto").lower()
         self.pending_proposals: List[TradeProposal] = []
         self.logger.info(f"Trading mode: {self.trading_mode.upper()}")
-        self.logger.info(f"Initialized Hybrid Engine: Exec=Lighter, Signal=Hyperliquid")
+        self.logger.info(f"Initialized Hybrid Engine: Exec=Binance, Signal=Hyperliquid")
 
         # File paths
         self.diary_path = Path("data/diary.jsonl")
@@ -120,7 +120,7 @@ class TradingBotEngine:
         self.start_time = datetime.now(UTC)
         self.invocation_count = 0
 
-        # Get initial account value from Lighter
+        # Get initial account value from Binance
         try:
             user_state = await self.exchange.get_user_state()
             margin = user_state.get("margin_summary", {})
@@ -161,14 +161,13 @@ class TradingBotEngine:
                 self.state.invocation_count = self.invocation_count
 
                 try:
-                    # ===== PHASE 1: Fetch Account State (Lighter) =====
-                    # We trust Lighter for balance and positions
+                    # ===== PHASE 1: Fetch Account State (Binance) =====
                     user_state = await self.exchange.get_user_state()
                     
                     margin = user_state.get("margin_summary", {})
                     balance = margin.get("total_n_usd", 0.0)
                     total_value = margin.get("account_value", 0.0)
-                    equity = total_value # For Lighter, account value includes PnL
+                    equity = total_value 
 
                     # Calculate stats
                     initial = self.initial_account_value or 1000.0
@@ -182,19 +181,15 @@ class TradingBotEngine:
                     self.state.sharpe_ratio = sharpe_ratio
 
                     # ===== PHASE 2: Enrich Positions (Hybrid) =====
-                    # Positions come from Lighter, but we can enrich with HL price if needed
-                    # For consistency, we use Lighter's own mark price if available, or HL as fallback
                     raw_positions = user_state.get("asset_positions", [])
                     enriched_positions = []
                     
                     for item in raw_positions:
                         pos = item.get("position", {})
-                        symbol = item.get("coin")
+                        symbol = item.get("coin") # e.g. BTCUSDT
                         
-                        # Use HL price for visual reference if needed, or Lighter's
-                        # We'll use Lighter's mark price implicit in PnL usually, but let's fetch HL price
-                        # to show "market price" on dashboard
-                        current_price = await self.hl.get_current_price(symbol)
+                        # Use Binance Mark Price for accuracy
+                        current_price = await self.exchange.get_market_price(symbol.replace("USDT", ""))
                         
                         size = float(pos.get("szi", 0))
                         if size != 0:
@@ -210,7 +205,7 @@ class TradingBotEngine:
                     
                     self.state.positions = enriched_positions
 
-                    # ===== PHASE 3: Fetch Open Orders (Lighter) =====
+                    # ===== PHASE 3: Fetch Open Orders (Binance) =====
                     open_orders = await self.exchange.get_open_orders()
                     self.state.open_orders = open_orders
 
@@ -219,25 +214,25 @@ class TradingBotEngine:
                     
                     for asset in self.assets:
                         try:
-                            # 1. Price Source: Hyperliquid (High liquidity reference)
+                            # 1. Price Source: Hyperliquid (Reference)
                             hl_price = await self.hl.get_current_price(asset)
                             
                             # 2. Indicators: TAAPI
                             indicators = self.taapi.fetch_asset_indicators(asset)
                             
-                            # 3. Sentiment/Flow: HL Open Interest & Funding
+                            # 3. Sentiment: HL Open Interest & Funding
                             oi = await self.hl.get_open_interest(asset)
                             funding = await self.hl.get_funding_rate(asset)
                             
-                            # 4. Lighter Price (Execution reference)
-                            lighter_price = await self.exchange.get_market_price(asset)
+                            # 4. Execution Price (Binance)
+                            binance_price = await self.exchange.get_market_price(asset)
                             
                             # Build context
                             market_sections.append({
                                 "asset": asset,
-                                "current_price": hl_price, # Use HL as "Global Price"
-                                "execution_price": lighter_price, # Use Lighter as "Local Price"
-                                "spread_pct": abs(hl_price - lighter_price)/hl_price*100 if hl_price else 0,
+                                "current_price": hl_price, 
+                                "execution_price": binance_price, 
+                                "spread_pct": abs(hl_price - binance_price)/hl_price*100 if hl_price else 0,
                                 "funding_rate": funding,
                                 "open_interest": oi,
                                 "intraday": self._extract_indicators(indicators, "5m"),
@@ -257,7 +252,7 @@ class TradingBotEngine:
                             "positions": enriched_positions
                         },
                         "market_data": market_sections,
-                        "instructions": "Trade on Lighter.xyz using Hyperliquid signals. execution_price is your fill price."
+                        "instructions": "Trade on Binance Futures. Use Hyperliquid signals for analysis."
                     }
                     
                     context = json.dumps(context_payload, default=json_default)
@@ -269,23 +264,23 @@ class TradingBotEngine:
                     self.state.last_reasoning = decisions
                     trade_decisions = decisions.get('trade_decisions', [])
 
-                    # ===== PHASE 6: Execution (Lighter) =====
+                    # ===== PHASE 6: Execution (Binance) =====
                     for decision in trade_decisions:
                         asset = decision.get('asset')
                         action = decision.get('action')
                         allocation = float(decision.get('allocation_usd', 0))
                         
                         if action in ['buy', 'sell'] and allocation > 0:
-                            # 1. Check Lighter Price
+                            # 1. Check Binance Price
                             exec_price = await self.exchange.get_market_price(asset)
                             if exec_price <= 0:
-                                self.logger.warning(f"Lighter price for {asset} is 0, skipping trade")
                                 continue
                                 
                             # 2. Calculate Size
+                            # Binance contracts usually have min size filters, but SDK handles basic errors
                             size = allocation / exec_price
                             
-                            # 3. Execute on Lighter
+                            # 3. Execute
                             if self.trading_mode == "auto":
                                 result = await self.exchange.place_order(
                                     asset=asset,
@@ -293,20 +288,16 @@ class TradingBotEngine:
                                     size=size,
                                     order_type="market"
                                 )
-                                self.logger.info(f"Lighter Execution {asset} {action}: {result}")
+                                self.logger.info(f"Binance Execution {asset} {action}: {result}")
                                 
-                                # Notify
                                 if self.on_trade_executed:
                                     self.on_trade_executed({
                                         "asset": asset,
                                         "action": action,
                                         "price": exec_price,
                                         "size": size,
-                                        "venue": "Lighter"
+                                        "venue": "Binance"
                                     })
-                            else:
-                                # Create proposal logic (omitted for brevity, same as before)
-                                pass
 
                     self._notify_state_update()
 

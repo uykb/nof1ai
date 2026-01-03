@@ -72,10 +72,10 @@ CONFIG = {
     # API keys - not required during module import (checked when bot starts)
     "taapi_api_key": _get_env("TAAPI_API_KEY"),
     
-    # Lighter Exchange Keys
-    "lighter_api_key": _get_env("LIGHTER_API_KEY"),
-    "lighter_private_key": _get_env("LIGHTER_PRIVATE_KEY"),
-    "lighter_web3_private_key": _get_env("LIGHTER_WEB3_PRIVATE_KEY"),  # For signing if needed
+    # Binance Exchange Keys
+    "binance_api_key": _get_env("BINANCE_API_KEY"),
+    "binance_secret_key": _get_env("BINANCE_SECRET_KEY"),
+    "binance_testnet": _get_bool("BINANCE_TESTNET", False),
 
     # Hyperliquid (Signal Source Only)
     "hyperliquid_private_key": _get_env("HYPERLIQUID_PRIVATE_KEY"),
