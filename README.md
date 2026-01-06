@@ -1,113 +1,135 @@
-# nof1.ai Alpha Arena Trading Bot
+# NOF1.AI Alpha Arena - AI Trading Bot
 
-![nof1.ai Banner](assets/download.png)
+![NOF1.AI Banner](assets/download.png)
 
-An autonomous, AI-driven crypto trading bot designed for the [Hyperliquid](https://hyperliquid.xyz) exchange. It leverages Large Language Models (LLMs) like Grok, GPT-4, and Claude to analyze market data, technical indicators, and news to execute trades with sophisticated risk management.
+An autonomous, AI-driven crypto trading bot designed for **Binance Futures**. It leverages advanced Large Language Models (LLMs) like Grok, Gemini, and GPT-4 to analyze market structure, while using **Hyperliquid** as an on-chain signal source for transparency and accuracy.
 
-**Now fully Dockerized for easy deployment.**
-
----
-
-## 🚀 Key Features
-
-*   **AI-Powered Decisions**: Uses advanced LLMs to analyze market structure and sentiment.
-*   **Fully Autonomous**: Handles entry, exit, position sizing, and risk management automatically.
-*   **Real-time Dashboard**: Web-based GUI to monitor positions, performance, and AI reasoning.
-*   **Robust Architecture**: 
-    *   **PostgreSQL**: Secure, persistent storage for trade history and state.
-    *   **Redis**: High-speed caching for technical indicators (TAAPI).
-    *   **Docker**: One-command deployment.
-*   **Safety First**: Local key storage, stop-loss logic, and max drawdown protection.
+**🚀 Core Architecture:**
+*   **Execution**: Binance Futures (USDT-M) via Official Connector.
+*   **Signal Source**: Hyperliquid (On-chain Price, Funding, Open Interest).
+*   **Analysis**: TAAPI.io (Technical Indicators) + LLM (Decision Making).
+*   **Infrastructure**: Docker + PostgreSQL + Redis.
 
 ---
 
 ## 🛠 Prerequisites
 
-*   **Docker** & **Docker Compose** installed on your machine or server.
-*   **Hyperliquid Account**: You need a private key (it's recommended to use a sub-account/API wallet).
-*   **API Keys**:
-    *   [OpenRouter](https://openrouter.ai/) (for LLM access)
-    *   [TAAPI.io](https://taapi.io/) (for technical indicators)
+Before you begin, ensure you have:
+
+1.  **A Server (VPS)**: Ubuntu 22.04+ recommended (2GB RAM min).
+2.  **Binance Account**:
+    *   Create API Key & Secret.
+    *   **Enable Futures Trading** permissions for the key.
+    *   *(Optional)* Whitelist your server IP for security.
+3.  **API Keys**:
+    *   [OpenRouter](https://openrouter.ai/) (for LLM access).
+    *   [TAAPI.io](https://taapi.io/) (for technical indicators).
+4.  **Software**:
+    *   [Docker](https://docs.docker.com/engine/install/) & [Docker Compose](https://docs.docker.com/compose/install/) installed.
 
 ---
 
 ## 📦 Installation & Deployment
 
 ### 1. Clone the Repository
+Connect to your server via SSH and run:
+
 ```bash
-git clone https://github.com/your-username/nof-trading-bot.git
-cd nof-trading-bot
+git clone https://github.com/uykb/nof1ai.git
+cd nof1ai
 ```
 
-### 2. Configuration
+### 2. Configuration (Vital Step)
 Create your environment file from the template:
 
 ```bash
 cp .env.template .env
 ```
 
-Edit `.env` and fill in your details:
+**Edit the `.env` file** (`nano .env`) and fill in your keys:
 
 ```ini
-# Core Keys
-HYPERLIQUID_PRIVATE_KEY=0xYourPrivateKey...
-OPENROUTER_API_KEY=sk-or-v1-...
-TAAPI_API_KEY=YourTaapiKey...
+# --- Exchange Configuration (Binance) ---
+BINANCE_API_KEY=your_binance_api_key_here
+BINANCE_SECRET_KEY=your_binance_secret_key_here
+# Set to 'true' only if using Binance Testnet
+BINANCE_TESTNET=false
 
-# Settings
-LLM_MODEL=x-ai/grok-4      # or openai/gpt-4o, anthropic/claude-3.5-sonnet
-TRADING_MODE=auto          # 'auto' for autonomous, 'manual' for AI suggestions only
-ASSETS=BTC,ETH,SOL         # Assets to trade
+# --- AI Model Configuration ---
+OPENROUTER_API_KEY=sk-or-v1-your_key_here
+# Recommended Models:
+# - x-ai/grok-4 (High reasoning)
+# - google/gemini-2.0-flash-exp:free (Fast & Free)
+# - anthropic/claude-3.5-sonnet (Balanced)
+LLM_MODEL=google/gemini-2.0-flash-exp:free
+
+# --- Data Source ---
+TAAPI_API_KEY=your_taapi_key_here
+# Leave Hyperliquid key empty (used for public read-only data)
+HYPERLIQUID_PRIVATE_KEY=
+
+# --- Trading Parameters ---
+ASSETS=BTC,ETH
+INTERVAL=5m
+# 'auto' = Bot executes trades
+# 'manual' = Bot only sends proposals for approval
+TRADING_MODE=auto
+
+# --- System (Default is fine) ---
+APP_PORT=3000
 ```
 
 ### 3. Launch with Docker
 Start the entire stack (Bot + Database + Redis) in the background:
 
 ```bash
+# Pull the latest pre-built image
+docker pull ghcr.io/uykb/nof1ai:latest
+
+# Start services
 docker-compose up -d
 ```
 
-### 4. Access the Dashboard
-Open your browser and navigate to:
-**http://localhost:3000**
+> **Note**: If you modified the code locally, use `docker-compose up -d --build` to rebuild from source.
 
-To view logs:
+### 4. Verify & Monitor
+Check if the bot is running correctly:
+
 ```bash
 docker-compose logs -f app
 ```
-
-To stop the bot:
-```bash
-docker-compose down
-```
+*You should see logs like "Bot started", "BinanceAPI initialized", and "Sync state success".*
 
 ---
 
-## 🏗 Architecture
+## 🖥️ Dashboard Access
 
-The project is composed of three main services:
+Open your browser and navigate to:
+**http://<your-server-ip>:3000**
 
-1.  **App Service (`nof-trading-bot`)**:
-    *   **Backend**: Python/FastAPI-style logic running the `TradingBotEngine`.
-    *   **Frontend**: `NiceGUI` web interface served on port 3000.
-2.  **Database (`nof-db`)**:
-    *   PostgreSQL 15 instance storing trades, positions, and AI diaries.
-    *   Data persists in the `postgres_data` volume.
-3.  **Cache (`nof-redis`)**:
-    *   Redis instance for caching TAAPI responses to save API credits and reduce latency.
+*   **Dashboard**: View real-time balance, positions, and AI reasoning.
+*   **Manual Mode**: If `TRADING_MODE=manual`, go to the **Recommendations** tab to approve/reject AI trade proposals.
 
 ---
 
-## 🛡 Security & disclaimer
+## 🛡️ Security Best Practices
 
-*   **Your Keys, Your Control**: Private keys are stored only in your local `.env` file (or injected via your deployment environment variables). They are never sent to any third-party server other than Hyperliquid for signing.
-*   **Risk Warning**: Crypto trading involves significant risk. This bot is experimental software. **Use at your own risk.** Always test with small amounts first.
+1.  **Dedicated Wallet**: Use a sub-account or dedicated account for the bot with limited funds.
+2.  **IP Whitelist**: In Binance API settings, restrict access to your VPS IP address only.
+3.  **SSH Security**: Use SSH Key authentication and disable password login on your VPS.
+4.  **Environment Variables**: Never share your `.env` file. It is excluded from Git by default.
 
 ---
 
-## 🤝 Contributing
+## 🏗 Project Structure
 
-Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
+*   `src/backend/bot_engine.py`: The brain. Coordinates data fetching, AI reasoning, and trade execution.
+*   `src/backend/trading/binance_api.py`: Official Binance Connector wrapper.
+*   `src/backend/trading/hyperliquid_api.py`: Read-only adapter for on-chain signals.
+*   `src/backend/agent/decision_maker.py`: AI Agent logic (Prompt Engineering).
+*   `src/gui/`: NiceGUI-based frontend (Obsidian/Glassmorphism design).
+
+---
 
 ## 📄 License
 
